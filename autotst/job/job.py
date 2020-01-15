@@ -171,6 +171,7 @@ class Job():
         """
         A method to determine if a job is still running
         """
+        return True
         command = """squeue -n "{}" """.format(label)
         squeue_error = "Socket timed out on send/recv operation"
         squeued = False
@@ -582,14 +583,16 @@ class Job():
             copy_molecule.delete_hydrogens()
             number_of_atoms = len(copy_molecule.atoms)
             if number_of_atoms >= 4:
-                nproc = 2
+                nproc = 10
             elif number_of_atoms >= 7:
-                nproc = 4
+                nproc = 12
             elif number_of_atoms >= 9:
-                nproc = 6
+                nproc = 14
             else:
-                nproc = 8
+                nproc = 16
 
+        #logging.info("Trying to submit {}... skipping for this test case".format(ase_calculator.label))
+        #return ase_calculator.label #to ignore submitting things for now
         self.write_input(transitionstate, ase_calculator)
 
         label = ase_calculator.label
@@ -713,10 +716,61 @@ class Job():
                 logging.info("This reaction has already been run and has a successful validated transition state! :)")
                 return True
 
-
-
         if self.conformer_calculator:
-            self.reaction.generate_conformers(ase_calculator=self.conformer_calculator)
+            #if not restart:
+            if False: #doing this for now
+                from ..data.inputoutput import get_possible_names
+                r, p = self.reaction.label.split("_")
+                possible_names = get_possible_names(r.split("+"), p.split("+"))
+                got_match = False
+                for possible_name in possible_names:
+                    if got_match:
+                        continue
+                    if os.path.exists(
+                        os.path.join(self.directory, "ts", possible_name, "conformers")
+                    ):
+                        print("")
+                        print("SCRATCH_PATH: {}".format(os.path.join(self.directory, "ts", possible_name, "conformers")))
+                        print("")
+                        logging.info("It seems that the conformer analysis has already been performed, reading in the existing conformer files rather than running conformer analysis again.")
+                        got_match = True
+                        self.reaction.label = possible_name
+                        files = [f for f in os.listdir(os.path.join(self.directory, "ts", possible_name, "conformers")) if ((".com" in f) and ("shell" in f))]
+                        logging.info("There were {} files".format(len(files)))
+                        forwards = [f for f in files if "forward" in f]
+                        reverses = [f for f in files if "reverse" in f]
+                        import ase.io.gaussian 
+                        forward_ts = self.reaction.ts["forward"][0]
+                        forward_ts_list = []
+                        logging.info("-  There were {} forward files".format(len(forwards)))
+                        for forward in forwards:
+                            ts_copy = forward_ts.copy()
+                            ts_copy._ase_molecule = ase.io.gaussian.read_gaussian(os.path.join(
+                                self.directory, "ts", possible_name, "conformers", forward
+                            ))
+                            ts_copy.direction = "forward"
+                            ts_copy.index = forward.split("_")[-1].strip(".com")
+                            forward_ts_list.append(ts_copy)
+
+                        reverse_ts = self.reaction.ts["forward"][0]
+                        reverse_ts_list = []
+                        logging.info("-  There were {} reverse files".format(len(reverses)))
+                        for reverse in reverses:
+                            ts_copy = reverse_ts.copy()
+                            ts_copy._ase_molecule = ase.io.gaussian.read_gaussian(os.path.join(
+                                self.directory, "ts", possible_name, "conformers", reverse
+                            ))
+                            ts_copy.direction = "reverse"
+                            ts_copy.index = reverse.split("_")[-1].strip(".com")
+                            reverse_ts_list.append(ts_copy)
+
+                        self.reaction.ts["forward"] = forward_ts_list
+                        self.reaction.ts["reverse"] = reverse_ts_list
+
+                if not got_match:
+                    self.reaction.generate_conformers(ase_calculator=self.conformer_calculator)
+            else:
+                self.reaction.generate_conformers(ase_calculator=self.conformer_calculator)
 
         currently_running = []
         processes = {}
