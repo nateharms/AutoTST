@@ -173,14 +173,19 @@ class Job():
         """
         return True
         command = """squeue -n "{}" """.format(label)
-        squeue_error = "Socket timed out on send/recv operation"
+        squeue_error = "Socket timed out on send/recv operation".lower()
         squeued = False
 
         while not squeued:
             with subprocess.Popen(command, shell=True, stdout=subprocess.PIPE) as popen:
                 output = popen.communicate()[0]
-            if squeue_error in output.decode("utf-8"):
+            if squeue_error in output.decode("utf-8").lower():
                 # squeue is running slowly, waiting a bit and checking again.
+                logging.info("Was unable to check the queue for {}, trying again later...".format(label))
+                time.sleep(90)
+            elif "JOBID".lower() not in output.decode("utf-8").lower():
+                # Not the expected output from squeue
+                logging.info("Was unable to check the queue for {}, trying again later...".format(label))
                 time.sleep(90)
             else:
                 squeued = True
@@ -197,9 +202,9 @@ class Job():
         - QOS errors
         - having too many jobs submitted 
         """
-        sbatch_success = "Submitted batch job"
-        squeue_error = "Socket timed out on send/recv operation"
-        sbatch_error = "Batch job submission failed: Job violates accounting/QOS policy"
+        sbatch_success = "Submitted batch job".lower()
+        squeue_error = "Socket timed out on send/recv operation".lower()
+        sbatch_error = "Batch job submission failed: Job violates accounting/QOS policy".lower()
         overall_queue = False # is the overall queue able to accept another job
         user_queue = False # is the user's queue able to accept another job
         submitted = False # has the job been submitted yet?
@@ -209,7 +214,7 @@ class Job():
             # while the overall queue is big and there are fewer than 10 attempts to squeue
             with subprocess.Popen("squeue", shell=True, stdout=subprocess.PIPE) as popen:
                 squeue_output = popen.communicate()[0]
-            if squeue_error in squeue_output.decode("utf-8"):
+            if squeue_error in squeue_output.decode("utf-8").lower():
                 # squeue is having a slow response time, waiting and trying again
                 logging.error("There is a slow response time for squeue, waiting and trying again")
                 time.sleep(90)
@@ -229,14 +234,17 @@ class Job():
             pass
 
         # to check the number of jobs that the user has in the queue
+        reported = False
         while not user_queue:
             with subprocess.Popen("squeue -u {}".format(self.username), shell=True, stdout=subprocess.PIPE) as popen:
                 squeue_output = popen.communicate()[0]
-            if squeue_error in squeue_output.decode("utf-8"):
+            if squeue_error in squeue_output.decode("utf-8").lower():
                 # squeue is having a slow response time, waiting and trying again
-                logging.error("There is a slow response time for squeue, waiting and trying again")
-                time.sleep(90)
-            elif len(squeue_output.decode("utf-8").splitlines()) > 500: 
+                if not reported:
+                    logging.error("There is a slow response time for squeue, waiting and trying again")
+                    reported = True
+                time.sleep(90) 
+            elif len(squeue_output.decode("utf-8").splitlines()) > 100: 
                 # user has greater than than 500 jobs, the limit for discovery is 1.5k, waiting and trying again
                 logging.error("The user has too many jobs in the queue at the moment, trying to submit in a bit")
                 time.sleep(90)
@@ -249,10 +257,15 @@ class Job():
             # It's not submitted or there are fewer than 10 attempts to sbatch
             with subprocess.Popen(command, shell=True, stdout=subprocess.PIPE) as popen:
                 sbatch_output = popen.communicate()[0]
-            if sbatch_error in sbatch_output.decode("utf-8"):
+            if sbatch_error in sbatch_output.decode("utf-8").lower():
                 # we ran into a QOS / accounting error, this occured because jobs were submitted between now and when we last checked the queue.
                 # gonna wait and try again
+                logging.error("Ran into a QOS / accounting error when trying to submit a job, waiting a bit and trying it in a bit")
+                logging.error(sbatch_output)
+                time.sleep(90)
+            elif sbatch_success not in sbatch_output.decode("utf-8").lower():
                 logging.error("Ran into an issue when trying to submit a job, waiting a bit and trying it in a bit")
+                logging.error(sbatch_output)
                 time.sleep(90)
             else:
                 logging.info("Job submitted via sbatch.")
@@ -485,7 +498,7 @@ class Job():
                 time.sleep(90)
             time.sleep(90)
             process.start()
-            process.join()
+            #process.join()
             currently_running.append(name)
 
         # This loop will block until everything in currently_running
@@ -628,6 +641,7 @@ class Job():
                 self.submit(command)
             else:
                 # it's currently in the queue, so not actually submitting it
+                logging.info("{} is already in the queue, waiting for it to complete...".format(label))
                 return label
         return label
 
@@ -663,6 +677,7 @@ class Job():
                     "Submitting {} calculations for {}".format(opt_type.upper(),ts_identifier))
                 label = self.submit_transitionstate(
                     transitionstate, opt_type=opt_type.lower())
+                time.sleep(90)
                 while not self.check_complete(label):
                     time.sleep(90)
 
@@ -791,7 +806,7 @@ class Job():
                 time.sleep(90)
             time.sleep(90)
             process.start()
-            process.join()
+            #process.join()
             currently_running.append(name)
 
         while len(currently_running) > 0:
