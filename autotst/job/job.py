@@ -171,7 +171,6 @@ class Job():
         """
         A method to determine if a job is still running
         """
-        return True
         command = """squeue -n "{}" """.format(label)
         squeue_error = "Socket timed out on send/recv operation".lower()
         squeued = False
