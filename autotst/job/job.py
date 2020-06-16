@@ -622,9 +622,9 @@ class Job():
                 f"""--output="{label}.slurm.log" """, 
                 f"""--error="{label}.slurm.log" """,
                 """-N 1""",
-                f"""-n {nproc}""",
-                """-t 24:00:00""",
-                f"--mem {self.calculator.settings['mem']}"
+                f"""-n 24""",
+                """-t 8:15:00""",
+                f"--mem 120GB"
             ]
             # Building on the remaining commands
             if self.partition:
