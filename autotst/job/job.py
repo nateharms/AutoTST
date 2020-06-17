@@ -589,19 +589,19 @@ class Job():
         if opt_type.lower() != "irc":
             number_of_atoms = transitionstate.rmg_molecule.get_num_atoms() - transitionstate.rmg_molecule.get_num_atoms('H')
             if number_of_atoms >= 4:
-                nproc = 2
-            elif number_of_atoms >= 7:
-                nproc = 4
-            elif number_of_atoms >= 9:
                 nproc = 6
-            else:
+            elif number_of_atoms >= 7:
                 nproc = 8
+            elif number_of_atoms >= 9:
+                nproc = 10
+            else:
+                nproc = 12
         else:
             # This is an IRC 
-            nproc = "14"
+            nproc = 24
 
         ase_calculator.nprocshared = nproc
-
+        ase_calculator.mem = f'{round(4.5 * nproc)}GB'
         self.write_input(transitionstate, ase_calculator)
 
         label = ase_calculator.label
@@ -622,9 +622,9 @@ class Job():
                 f"""--output="{label}.slurm.log" """, 
                 f"""--error="{label}.slurm.log" """,
                 """-N 1""",
-                f"""-n 24""",
-                """-t 8:15:00""",
-                f"--mem 120GB"
+                f"""-n {nproc}""",
+                """-t 16:30:00""",
+                f"--mem {5*nproc}GB"
             ]
             # Building on the remaining commands
             if self.partition:
@@ -762,7 +762,7 @@ class Job():
                 time.sleep(90)
             time.sleep(90)
             process.start()
-            process.join()
+            #process.join()
             currently_running.append(name)
 
         while len(currently_running) > 0:
