@@ -601,7 +601,8 @@ class Job():
             nproc = 24
 
         ase_calculator.nprocshared = nproc
-        ase_calculator.mem = f'{round(4.5 * nproc)}GB'
+        ase_calculator.parameters['nprocshared'] = str(nproc)
+        ase_calculator.parameters['mem'] = f'{round(4.5 * nproc)}GB'
         self.write_input(transitionstate, ase_calculator)
 
         label = ase_calculator.label
